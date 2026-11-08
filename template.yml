@@ -1,0 +1,99 @@
+id: old-pros-search-map
+version: 1.0.1
+name: Old Pros Search Map
+description: Zoomable point map with search, category colors and popups
+author: Noontide Studios
+credits: "Base map © [OpenFreeMap](https://openfreemap.org) © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors"
+
+sdk_version: 3
+
+build:
+  src:
+    script: npm run build
+    directory: src
+    files:
+      - rollup.config.js
+
+  less:
+    script: npm run less
+    directory: less
+
+settings:
+  - Map
+  - property: map_style
+    name: Base map style URL
+    type: string
+  - property: start_lat
+    name: Start latitude
+    type: number
+    width: quarter
+  - property: start_lon
+    name: Start longitude
+    type: number
+    width: quarter
+  - property: start_zoom
+    name: Start zoom
+    type: number
+    min: 0
+    max: 18
+    step: 0.5
+    width: quarter
+
+  - Points
+  - property: point_radius
+    name: Point radius
+    type: number
+    min: 2
+    max: 20
+  - property: category_colors
+    name: Category palette
+    type: colors
+  - property: color_overrides
+    name: Color overrides
+    description: "One per line, e.g. Historic Landmark: #990F4B"
+    type: text
+
+  - Search
+  - property: search_placeholder
+    name: Placeholder text
+    type: string
+  - property: search_zoom
+    name: Zoom level when a result is picked
+    type: number
+    min: 1
+    max: 18
+
+  - Popups & panels
+  - property: popup
+    import: "@flourish/info-popup"
+
+data:
+  - Locations
+  - name: Name
+    dataset: points
+    key: name
+    type: column
+    column: Points::A
+  - name: Category
+    dataset: points
+    key: category
+    type: column
+    column: Points::B
+  - name: Latitude
+    dataset: points
+    key: lat
+    type: column
+    column: Points::C
+    data_type: [number, string]
+  - name: Longitude
+    dataset: points
+    key: lon
+    type: column
+    column: Points::D
+    data_type: [number, string]
+  - name: Popup info
+    description: Any columns to show in the popup
+    dataset: points
+    key: info
+    type: columns
+    columns: Points::E
