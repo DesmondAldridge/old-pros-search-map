@@ -11,6 +11,8 @@ export var state = {
   base_border_color: null,
   base_label_color: null,
   base_label_halo: null,
+  base_label_opacity: 1,
+  base_label_halo_opacity: 1,
   start_lat: 30,
   start_lon: 0,
   start_zoom: 1.5,
@@ -384,7 +386,8 @@ var PALETTE_RULES = [
   { setting: "base_road_color", prop: "line-color", test: function (l) { return l["source-layer"] === "transportation" && l.type === "line"; } },
   { setting: "base_border_color", prop: "line-color", test: function (l) { return l["source-layer"] === "boundary" && l.type === "line"; } },
   { setting: "base_label_color", prop: "text-color", test: function (l) { return l.type === "symbol"; } },
-  { setting: "base_label_halo", prop: "text-halo-color", test: function (l) { return l.type === "symbol"; } }
+  { setting: "base_label_halo", prop: "text-halo-color", test: function (l) { return l.type === "symbol"; } },
+  { setting: "base_label_opacity", prop: "text-opacity", test: function (l) { return l.type === "symbol"; } }
 ];
 
 var baseDefaults = {};
@@ -412,13 +415,26 @@ function applyBasePalette() {
   baseLayers().forEach(function (layer) {
     PALETTE_RULES.forEach(function (rule) {
       if (!rule.test(layer)) return;
-      var custom = state[rule.setting];
-      // Blank setting restores the style's original value
-      map.setPaintProperty(layer.id, rule.prop, custom || baseDefaults[layer.id + "|" + rule.prop]);
+      var custom = customValue(rule);
+      // No custom value restores the style's original value
+      map.setPaintProperty(layer.id, rule.prop,
+        custom != null ? custom : baseDefaults[layer.id + "|" + rule.prop]);
     });
     if (layer.type === "symbol") {
       map.setLayoutProperty(layer.id, "visibility",
         state.base_hide_labels ? "none" : baseDefaults[layer.id + "|visibility"]);
     }
   });
+
+  function customValue(rule) {
+    var v = state[rule.setting];
+    if (rule.setting === "base_label_opacity") {
+      return v < 1 ? v : null; // 1 = untouched, keep the style's own opacity
+    }
+    if (rule.setting === "base_label_halo" && v) {
+      return withOpacity(v, state.base_label_halo_opacity);
+    }
+    return v || null;
+  }
+
 }
