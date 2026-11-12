@@ -17,6 +17,11 @@ export var state = {
   start_lon: 0,
   start_zoom: 1.5,
   point_radius: 6,
+  point_opacity: 1,
+  point_scale_with_zoom: false,
+  point_scale_factor: 2,
+  point_min_zoom: 0,
+  point_max_zoom: 24,
   category_colors: ["#1D6996", "#EDAD08", "#0F8554", "#CC503E", "#5F4690", "#38A6A5"],
   color_overrides: "Historic Landmark: #990F4B",
   search_placeholder: "Search locations…",
@@ -116,7 +121,9 @@ export function update() {
   if (!mapReady) return;
   applyBasePalette();
   map.getSource("points").setData({ type: "FeatureCollection", features: buildFeatures() });
-  map.setPaintProperty("points", "circle-radius", state.point_radius);
+  map.setPaintProperty("points", "circle-radius", radiusValue());
+  map.setPaintProperty("points", "circle-opacity", state.point_opacity);
+  map.setLayerZoomRange("points", state.point_min_zoom, state.point_max_zoom);
   map.setPaintProperty("points", "circle-color", colorExpression());
   document.getElementById("search-input").placeholder = state.search_placeholder;
 
@@ -137,6 +144,13 @@ function coords(row) {
   return isFinite(lat) && isFinite(lon) ? [lon, lat] : null;
 }
 
+function radiusValue() {
+  var r = state.point_radius;
+  if (!state.point_scale_with_zoom) return r;
+  // Normal size up to zoom 2, growing steadily to r × factor by zoom 14
+  return ["interpolate", ["linear"], ["zoom"], 2, r, 14, r * state.point_scale_factor];
+}
+
 function addPointLayer() {
   map.addSource("points", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
   map.addLayer({
@@ -144,7 +158,8 @@ function addPointLayer() {
     type: "circle",
     source: "points",
     paint: {
-      "circle-radius": state.point_radius,
+      "circle-radius": radiusValue(),
+      "circle-opacity": state.point_opacity,
       "circle-color": "#888888",
       "circle-stroke-width": 1,
       "circle-stroke-color": "#ffffff"
