@@ -117,7 +117,7 @@ settings:
     name: Color overrides
     description: "One per line, e.g. Historic Landmark: #990F4B"
     type: text
-      - property: point_opacity
+  - property: point_opacity
     name: Point opacity
     type: number
     min: 0
@@ -310,6 +310,12 @@ data:
     key: info
     type: columns
     columns: Points::E
+  - name: Color (optional)
+    description: Hex color per row, e.g. #990F4B. Overrides category colors.
+    dataset: points
+    key: color
+    type: column
+    optional: true
 
   - Annotations
   - name: Label

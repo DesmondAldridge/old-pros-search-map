@@ -175,7 +175,9 @@ function buildFeatures() {
     out.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: c },
-      properties: { idx: i, category: row.category || "" }
+      properties: cleanHex(row.color)
+        ? { idx: i, category: row.category || "", color: cleanHex(row.color) }
+        : { idx: i, category: row.category || "" }
     });
   });
   return out;
@@ -199,12 +201,32 @@ function categoryColors() {
 function colorExpression() {
   var colors = categoryColors();
   var cats = Object.keys(colors);
-  if (!cats.length) return "#888888";
-  var expr = ["match", ["get", "category"]];
-  cats.forEach(function (c) { expr.push(c, colors[c]); });
-  expr.push("#888888"); // fallback
-  return expr;
+  var byCategory = "#888888";
+  if (cats.length) {
+    byCategory = ["match", ["get", "category"]];
+    cats.forEach(function (c) { byCategory.push(c, colors[c]); });
+    byCategory.push("#888888");
+  }
+  // Use the row's own color if it has one, otherwise the category color
+  return ["to-color", ["get", "color"], byCategory];
 }
+
+function cleanHex(value) {
+  var v = (value || "").trim();
+  if (!v) return null;
+  if (v[0] !== "#") v = "#" + v;
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v) ? v : null;
+}
+
+// function colorExpression() {
+//   var colors = categoryColors();
+//   var cats = Object.keys(colors);
+//   if (!cats.length) return "#888888";
+//   var expr = ["match", ["get", "category"]];
+//   cats.forEach(function (c) { expr.push(c, colors[c]); });
+//   expr.push("#888888"); // fallback
+//   return expr;
+// }
 
 // function showPopup(idx) {
 //   var row = rows()[idx];
