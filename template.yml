@@ -1,5 +1,5 @@
 id: old-pros-search-map
-version: 1.0.1
+version: 1.0.2
 name: Old Pros Search Map
 description: Zoomable point map with search, category colors and popups
 author: Noontide Studios
@@ -20,24 +20,37 @@ build:
 
 settings:
   - Map
+  # - property: map_style
+  #   name: Base map style URL
+  #   type: string
+  # - property: start_lat
+  #   name: Start latitude
+  #   type: number
+  #   width: quarter
+  # - property: start_lon
+  #   name: Start longitude
+  #   type: number
+  #   width: quarter
+  # - property: start_zoom
+  #   name: Start zoom
+  #   type: number
+  #   min: 0
+  #   max: 18
+  #   step: 0.5
+  #   width: quarter
+
   - property: map_style
-    name: Base map style URL
+    name: Base map
     type: string
-  - property: start_lat
-    name: Start latitude
-    type: number
-    width: quarter
-  - property: start_lon
-    name: Start longitude
-    type: number
-    width: quarter
-  - property: start_zoom
-    name: Start zoom
-    type: number
-    min: 0
-    max: 18
-    step: 0.5
-    width: quarter
+    choices_other: true
+    choices:
+      - [Liberty (detailed streets), "https://tiles.openfreemap.org/styles/liberty"]
+      - [Bright, "https://tiles.openfreemap.org/styles/bright"]
+      - [Positron (light, minimal), "https://tiles.openfreemap.org/styles/positron"]
+      - [Dark, "https://tiles.openfreemap.org/styles/dark"]
+      - [Fiord (dark blue), "https://tiles.openfreemap.org/styles/fiord"]
+
+
 
   - Points
   - property: point_radius
@@ -66,6 +79,122 @@ settings:
   - Popups & panels
   - property: popup
     import: "@flourish/info-popup"
+  
+  - Annotations
+  - property: annotations_show
+    name: Show annotations
+    type: boolean
+  - property: annotation_devices
+    name: Show on
+    type: string
+    style: buttons
+    choices:
+      - [All, all]
+      - [Desktop, desktop]
+      - [Mobile, mobile]
+    show_if: annotations_show
+  - property: annotation_min_zoom
+    name: Hide when zoomed out past
+    description: Annotations are hidden below this zoom level (0 = always visible)
+    type: number
+    min: 0
+    max: 18
+    step: 0.5
+    show_if: annotations_show
+  - property: annotation_text_size
+    name: Text size
+    type: number
+    min: 8
+    max: 40
+    width: half
+    show_if: annotations_show
+  - property: annotation_font_weight
+    name: Weight
+    type: string
+    style: buttons
+    width: half
+    choices:
+      - [Normal, "400"]
+      - [Bold, "700"]
+    show_if: annotations_show
+  - property: annotation_text_color
+    name: Text color
+    type: color
+    width: half
+    show_if: annotations_show
+  - property: annotation_bg_color
+    name: Background
+    type: color
+    width: half
+    show_if: annotations_show
+  - property: annotation_bg_opacity
+    name: Background opacity
+    type: number
+    min: 0
+    max: 1
+    step: 0.1
+    width: half
+    show_if: annotations_show
+  - property: annotation_max_width
+    name: Max width (px)
+    type: number
+    min: 60
+    max: 500
+    width: half
+    show_if: annotations_show
+  - property: annotation_padding
+    name: Padding
+    type: number
+    min: 0
+    max: 30
+    width: half
+    show_if: annotations_show
+  - property: annotation_radius
+    name: Corner radius
+    type: number
+    min: 0
+    max: 30
+    width: half
+    show_if: annotations_show
+  - property: annotation_offset_x
+    name: Default offset X
+    description: Used when a row has no Offset X
+    type: number
+    width: half
+    new_section: true
+    show_if: annotations_show
+  - property: annotation_offset_y
+    name: Default offset Y
+    description: Used when a row has no Offset Y (negative = above the point)
+    type: number
+    width: half
+    show_if: annotations_show
+  - property: annotation_connector
+    name: Connector line
+    type: boolean
+    new_section: true
+    show_if: annotations_show
+  - property: annotation_connector_color
+    name: Line color
+    type: color
+    width: half
+    show_if:
+      annotations_show: true
+      annotation_connector: true
+  - property: annotation_connector_width
+    name: Line width
+    type: number
+    min: 0.5
+    max: 6
+    step: 0.5
+    width: half
+    show_if:
+      annotations_show: true
+      annotation_connector: true
+  - property: annotation_dot
+    name: Dot at the point
+    type: boolean
+    show_if: annotations_show
 
 data:
   - Locations
@@ -97,3 +226,36 @@ data:
     key: info
     type: columns
     columns: Points::E
+
+  - Annotations
+  - name: Label
+    dataset: annotations
+    key: label
+    type: column
+    column: Annotations::A
+  - name: Latitude
+    dataset: annotations
+    key: lat
+    type: column
+    column: Annotations::B
+    data_type: [number, string]
+  - name: Longitude
+    dataset: annotations
+    key: lon
+    type: column
+    column: Annotations::C
+    data_type: [number, string]
+  - name: Offset X (px)
+    dataset: annotations
+    key: offset_x
+    type: column
+    column: Annotations::D
+    optional: true
+    data_type: [number, string]
+  - name: Offset Y (px)
+    dataset: annotations
+    key: offset_y
+    type: column
+    column: Annotations::E
+    optional: true
+    data_type: [number, string]

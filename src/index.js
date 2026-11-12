@@ -12,12 +12,30 @@ export var state = {
   color_overrides: "Historic Landmark: #990F4B",
   search_placeholder: "Search locations…",
   search_zoom: 12,
-  popup: {}
+  popup: {},
+  annotations_show: false,
+  annotation_devices: "all",
+  annotation_min_zoom: 0,
+  annotation_text_size: 13,
+  annotation_font_weight: "400",
+  annotation_text_color: "#222222",
+  annotation_bg_color: "#ffffff",
+  annotation_bg_opacity: 0.9,
+  annotation_max_width: 180,
+  annotation_padding: 6,
+  annotation_radius: 4,
+  annotation_offset_x: 0,
+  annotation_offset_y: -40,
+  annotation_connector: true,
+  annotation_connector_color: "#333333",
+  annotation_connector_width: 1,
+  annotation_dot: true
 };
 
 var map, popup, currentStyle;
 var hoveredIdx = null;
 var mapReady = false;
+var annotationMarkers = [];
 
 export function draw() {
   currentStyle = state.map_style;
@@ -71,6 +89,9 @@ export function draw() {
     if (popup.locked() != null) popup.update();
   });
 
+  map.on("zoom", updateAnnotationVisibility);
+  map.on("resize", updateAnnotationVisibility);
+
   initSearch();
 }
 
@@ -87,6 +108,8 @@ export function update() {
   map.setPaintProperty("points", "circle-radius", state.point_radius);
   map.setPaintProperty("points", "circle-color", colorExpression());
   document.getElementById("search-input").placeholder = state.search_placeholder;
+
+  renderAnnotations();
 
   popup
     .setColumnNames(rows().column_names || {})
@@ -251,4 +274,92 @@ function initSearch() {
   });
 
   input.addEventListener("blur", function () { render([]); });
+}
+
+// ---------- annotations ----------
+
+var SVG_NS = "http://www.w3.org/2000/svg";
+
+function numOr(value, fallback) {
+  var n = parseFloat(value);
+  return isFinite(n) ? n : fallback;
+}
+
+function withOpacity(hex, alpha) {
+  var h = (hex || "#ffffff").replace("#", "");
+  if (h.length === 3) h = h.split("").map(function (c) { return c + c; }).join("");
+  var n = parseInt(h, 16);
+  return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + alpha + ")";
+}
+
+function renderAnnotations() {
+  annotationMarkers.forEach(function (m) { m.remove(); });
+  annotationMarkers = [];
+  if (!state.annotations_show) return;
+
+  (data.annotations || []).forEach(function (row) {
+    var lat = parseFloat(row.lat), lon = parseFloat(row.lon);
+    if (!row.label || !isFinite(lat) || !isFinite(lon)) return;
+    var dx = numOr(row.offset_x, state.annotation_offset_x);
+    var dy = numOr(row.offset_y, state.annotation_offset_y);
+    var marker = new maplibregl.Marker({ element: buildAnnotation(row.label, dx, dy), anchor: "center" })
+      .setLngLat([lon, lat])
+      .addTo(map);
+    annotationMarkers.push(marker);
+  });
+
+  updateAnnotationVisibility();
+}
+
+function buildAnnotation(text, dx, dy) {
+  var root = document.createElement("div");
+  root.className = "annotation";
+
+  if (state.annotation_connector && (dx || dy)) {
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", "annotation-connector");
+    var line = document.createElementNS(SVG_NS, "line");
+    line.setAttribute("x1", 0);
+    line.setAttribute("y1", 0);
+    line.setAttribute("x2", dx);
+    line.setAttribute("y2", dy);
+    line.setAttribute("stroke", state.annotation_connector_color);
+    line.setAttribute("stroke-width", state.annotation_connector_width);
+    svg.appendChild(line);
+    root.appendChild(svg);
+  }
+
+  if (state.annotation_dot) {
+    var dot = document.createElement("div");
+    dot.className = "annotation-dot";
+    dot.style.background = state.annotation_connector_color;
+    root.appendChild(dot);
+  }
+
+  var label = document.createElement("div");
+  label.className = "annotation-label";
+  label.textContent = text;
+  label.style.left = dx + "px";
+  label.style.top = dy + "px";
+  label.style.fontSize = state.annotation_text_size + "px";
+  label.style.fontWeight = state.annotation_font_weight;
+  label.style.color = state.annotation_text_color;
+  label.style.background = withOpacity(state.annotation_bg_color, state.annotation_bg_opacity);
+  label.style.padding = state.annotation_padding + "px";
+  label.style.borderRadius = state.annotation_radius + "px";
+  label.style.maxWidth = state.annotation_max_width + "px";
+  root.appendChild(label);
+
+  return root;
+}
+
+function updateAnnotationVisibility() {
+  if (!map) return;
+  var isMobile = window.innerWidth < 600;
+  var deviceOk = state.annotation_devices === "all" ||
+    (state.annotation_devices === "mobile" ? isMobile : !isMobile);
+  var zoomOk = map.getZoom() >= state.annotation_min_zoom;
+  annotationMarkers.forEach(function (m) {
+    m.getElement().style.display = deviceOk && zoomOk ? "" : "none";
+  });
 }
