@@ -1,5 +1,5 @@
 id: old-pros-search-map
-version: 1.0.2
+version: 1.0.4
 name: Old Pros Search Map
 description: Zoomable point map with search, category colors and popups
 author: Noontide Studios
@@ -50,7 +50,42 @@ settings:
       - [Dark, "https://tiles.openfreemap.org/styles/dark"]
       - [Fiord (dark blue), "https://tiles.openfreemap.org/styles/fiord"]
 
-
+  - property: base_hide_labels
+    name: Hide map labels
+    type: boolean
+  - property: base_land_color
+    name: Land
+    type: color
+    optional: true
+    width: half
+    new_section: Base map colors (leave blank for style default)
+  - property: base_water_color
+    name: Water
+    type: color
+    optional: true
+    width: half
+  - property: base_road_color
+    name: Roads
+    type: color
+    optional: true
+    width: half
+  - property: base_border_color
+    name: Borders
+    type: color
+    optional: true
+    width: half
+  - property: base_label_color
+    name: Label text
+    type: color
+    optional: true
+    width: half
+    hide_if: base_hide_labels
+  - property: base_label_halo
+    name: Label outline
+    type: color
+    optional: true
+    width: half
+    hide_if: base_hide_labels
 
   - Points
   - property: point_radius

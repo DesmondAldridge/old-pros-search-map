@@ -4,6 +4,13 @@ export var data = {};
 
 export var state = {
   map_style: "https://tiles.openfreemap.org/styles/liberty",
+  base_hide_labels: false,
+  base_land_color: null,
+  base_water_color: null,
+  base_road_color: null,
+  base_border_color: null,
+  base_label_color: null,
+  base_label_halo: null,
   start_lat: 30,
   start_lon: 0,
   start_zoom: 1.5,
@@ -59,6 +66,7 @@ export function draw() {
 
   map.on("style.load", function () {
     addPointLayer();
+    captureBaseDefaults();
     mapReady = true;
     update();
   });
@@ -104,6 +112,7 @@ export function update() {
     return; // style.load will call update() again
   }
   if (!mapReady) return;
+  applyBasePalette();
   map.getSource("points").setData({ type: "FeatureCollection", features: buildFeatures() });
   map.setPaintProperty("points", "circle-radius", state.point_radius);
   map.setPaintProperty("points", "circle-color", colorExpression());
@@ -361,5 +370,55 @@ function updateAnnotationVisibility() {
   var zoomOk = map.getZoom() >= state.annotation_min_zoom;
   annotationMarkers.forEach(function (m) {
     m.getElement().style.display = deviceOk && zoomOk ? "" : "none";
+  });
+}
+
+
+// ---------- base map palette ----------
+
+// Which style layers each color setting controls (OpenMapTiles schema)
+var PALETTE_RULES = [
+  { setting: "base_land_color", prop: "background-color", test: function (l) { return l.type === "background"; } },
+  { setting: "base_water_color", prop: "fill-color", test: function (l) { return l["source-layer"] === "water" && l.type === "fill"; } },
+  { setting: "base_water_color", prop: "line-color", test: function (l) { return l["source-layer"] === "waterway" && l.type === "line"; } },
+  { setting: "base_road_color", prop: "line-color", test: function (l) { return l["source-layer"] === "transportation" && l.type === "line"; } },
+  { setting: "base_border_color", prop: "line-color", test: function (l) { return l["source-layer"] === "boundary" && l.type === "line"; } },
+  { setting: "base_label_color", prop: "text-color", test: function (l) { return l.type === "symbol"; } },
+  { setting: "base_label_halo", prop: "text-halo-color", test: function (l) { return l.type === "symbol"; } }
+];
+
+var baseDefaults = {};
+
+function baseLayers() {
+  // Only the base map's own layers, never the template's points layer
+  return map.getStyle().layers.filter(function (l) { return l.id !== "points"; });
+}
+
+function captureBaseDefaults() {
+  baseDefaults = {};
+  baseLayers().forEach(function (layer) {
+    PALETTE_RULES.forEach(function (rule) {
+      if (rule.test(layer)) {
+        baseDefaults[layer.id + "|" + rule.prop] = map.getPaintProperty(layer.id, rule.prop);
+      }
+    });
+    if (layer.type === "symbol") {
+      baseDefaults[layer.id + "|visibility"] = map.getLayoutProperty(layer.id, "visibility") || "visible";
+    }
+  });
+}
+
+function applyBasePalette() {
+  baseLayers().forEach(function (layer) {
+    PALETTE_RULES.forEach(function (rule) {
+      if (!rule.test(layer)) return;
+      var custom = state[rule.setting];
+      // Blank setting restores the style's original value
+      map.setPaintProperty(layer.id, rule.prop, custom || baseDefaults[layer.id + "|" + rule.prop]);
+    });
+    if (layer.type === "symbol") {
+      map.setLayoutProperty(layer.id, "visibility",
+        state.base_hide_labels ? "none" : baseDefaults[layer.id + "|visibility"]);
+    }
   });
 }
