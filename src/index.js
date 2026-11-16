@@ -569,7 +569,7 @@ var MULTIPLY_VS = [
 ].join("\n");
 
 var MULTIPLY_FS = [
-  "precision mediump float;",
+  "precision highp float;",
   "uniform float u_radius;",
   "uniform float u_stroke_width;",
   "uniform vec3 u_stroke_color;",
@@ -654,6 +654,9 @@ function createMultiplyLayer() {
       gl.uniform1f(loc.u_stroke_opacity, state.point_outline_opacity);
 
       // Multiply: result = base × (1 − a + a × color)
+      gl.disable(gl.CULL_FACE);
+      gl.disable(gl.STENCIL_TEST);
+      gl.disable(gl.DEPTH_TEST);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.DST_COLOR, gl.ONE_MINUS_SRC_ALPHA);
       gl.drawArrays(gl.TRIANGLES, 0, verts.length / 7);
