@@ -19,6 +19,7 @@ export var state = {
   start_zoom: 1.5,
   point_radius: 6,
   point_opacity: 1,
+  point_blend: "normal",
   point_scale_with_zoom: false,
   point_scale_factor: 2,
   point_min_zoom: 0,
@@ -143,6 +144,9 @@ export function update() {
     .setColumnNames(rows().column_names || {})
     .hideColumnNames(["lat", "lon"])
     .update();
+
+
+  applyBlendMode();
 }
 
 // ---------- points ----------
@@ -542,4 +546,172 @@ function applyCategoryFilter() {
   map.setFilter("points", hidden.length
     ? ["!", ["in", ["get", "category"], ["literal", hidden]]]
     : null);
+}
+
+
+// ---------- multiply blend mode ----------
+
+var MULTIPLY_VS = [
+  "attribute vec2 a_center;",   // point position in screen pixels
+  "attribute vec2 a_corner;",   // corner of the square around the point (-1..1)
+  "attribute vec3 a_color;",
+  "uniform vec2 u_viewport;",   // map size in screen pixels
+  "uniform float u_radius;",    // outer radius incl. outline
+  "varying vec2 v_offset;",
+  "varying vec3 v_color;",
+  "void main() {",
+  "  vec2 offset = a_corner * (u_radius + 1.0);",
+  "  vec2 clip = (a_center + offset) / u_viewport * 2.0 - 1.0;",
+  "  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);",
+  "  v_offset = offset;",
+  "  v_color = a_color;",
+  "}"
+].join("\n");
+
+var MULTIPLY_FS = [
+  "precision mediump float;",
+  "uniform float u_radius;",
+  "uniform float u_stroke_width;",
+  "uniform vec3 u_stroke_color;",
+  "uniform float u_opacity;",
+  "uniform float u_stroke_opacity;",
+  "varying vec2 v_offset;",
+  "varying vec3 v_color;",
+  "void main() {",
+  "  float d = length(v_offset);",
+  "  float outer = 1.0 - smoothstep(u_radius - 0.5, u_radius + 0.5, d);",   // soft circle edge
+  "  if (outer <= 0.0) discard;",
+  "  float fillR = u_radius - u_stroke_width;",
+  "  float inFill = 1.0 - smoothstep(fillR - 0.5, fillR + 0.5, d);",
+  "  vec3 col = mix(u_stroke_color, v_color, inFill);",
+  "  float a = outer * mix(u_stroke_opacity, u_opacity, inFill);",
+  "  gl_FragColor = vec4(col * a, a);",                                      // premultiplied
+  "}"
+].join("\n");
+
+var CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]; // two triangles = one square
+
+function applyBlendMode() {
+  var multiply = state.point_blend === "multiply";
+  var hasLayer = !!map.getLayer("points-multiply");
+  if (multiply && !hasLayer) map.addLayer(createMultiplyLayer());
+  if (!multiply && hasLayer) map.removeLayer("points-multiply");
+  // In multiply mode the regular layer stays for hover/click/filtering but draws nothing
+  map.setPaintProperty("points", "circle-opacity", multiply ? 0 : state.point_opacity);
+  map.setPaintProperty("points", "circle-stroke-opacity", multiply ? 0 : state.point_outline_opacity);
+  if (multiply) map.triggerRepaint();
+}
+
+function createMultiplyLayer() {
+  var program, buffer, vao;
+  var loc = {};
+  return {
+    id: "points-multiply",
+    type: "custom",
+    renderingMode: "2d",
+
+    onAdd: function (m, gl) {
+      program = linkProgram(gl, MULTIPLY_VS, MULTIPLY_FS);
+      buffer = gl.createBuffer();
+      if (gl.createVertexArray) vao = gl.createVertexArray();
+      ["a_center", "a_corner", "a_color"].forEach(function (n) { loc[n] = gl.getAttribLocation(program, n); });
+      ["u_viewport", "u_radius", "u_stroke_width", "u_stroke_color", "u_opacity", "u_stroke_opacity"]
+        .forEach(function (n) { loc[n] = gl.getUniformLocation(program, n); });
+    },
+
+    onRemove: function (m, gl) {
+      gl.deleteBuffer(buffer);
+      gl.deleteProgram(program);
+      if (vao) gl.deleteVertexArray(vao);
+    },
+
+    render: function (gl) {
+      var zoom = map.getZoom();
+      if (zoom < state.point_min_zoom || zoom >= state.point_max_zoom) return;
+      var verts = multiplyVertices();
+      if (!verts.length) return;
+
+      if (vao) gl.bindVertexArray(vao);
+      gl.useProgram(program);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+
+      var stride = 7 * 4;
+      gl.enableVertexAttribArray(loc.a_center);
+      gl.vertexAttribPointer(loc.a_center, 2, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(loc.a_corner);
+      gl.vertexAttribPointer(loc.a_corner, 2, gl.FLOAT, false, stride, 8);
+      gl.enableVertexAttribArray(loc.a_color);
+      gl.vertexAttribPointer(loc.a_color, 3, gl.FLOAT, false, stride, 16);
+
+      var canvas = map.getCanvas();
+      var stroke = hexToRgb01(state.point_outline_color);
+      gl.uniform2f(loc.u_viewport, canvas.clientWidth, canvas.clientHeight);
+      gl.uniform1f(loc.u_radius, currentRadius() + state.point_outline_width);
+      gl.uniform1f(loc.u_stroke_width, state.point_outline_width);
+      gl.uniform3f(loc.u_stroke_color, stroke[0], stroke[1], stroke[2]);
+      gl.uniform1f(loc.u_opacity, state.point_opacity);
+      gl.uniform1f(loc.u_stroke_opacity, state.point_outline_opacity);
+
+      // Multiply: result = base × (1 − a + a × color)
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.DST_COLOR, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawArrays(gl.TRIANGLES, 0, verts.length / 7);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); // back to MapLibre's normal blending
+
+      if (vao) {
+        gl.bindVertexArray(null);
+      } else {
+        gl.disableVertexAttribArray(loc.a_center);
+        gl.disableVertexAttribArray(loc.a_corner);
+        gl.disableVertexAttribArray(loc.a_color);
+      }
+    }
+  };
+}
+
+function multiplyVertices() {
+  var colors = categoryColors();
+  var out = [];
+  rows().forEach(function (row) {
+    var c = coords(row);
+    var cat = row.category || "";
+    if (!c || hiddenCategories[cat]) return;
+    var p = map.project(c);
+    var rgb = hexToRgb01(cleanHex(row.color) || colors[cat] || "#888888");
+    for (var k = 0; k < 12; k += 2) {
+      out.push(p.x, p.y, CORNERS[k], CORNERS[k + 1], rgb[0], rgb[1], rgb[2]);
+    }
+  });
+  return new Float32Array(out);
+}
+
+function currentRadius() {
+  var r = state.point_radius;
+  if (!state.point_scale_with_zoom) return r;
+  var t = Math.min(Math.max((map.getZoom() - 2) / 12, 0), 1); // same 2 → 14 ramp as radiusValue()
+  return r + (r * state.point_scale_factor - r) * t;
+}
+
+function hexToRgb01(hex) {
+  var h = (hex || "#888888").replace("#", "");
+  if (h.length === 3) h = h.split("").map(function (c) { return c + c; }).join("");
+  var n = parseInt(h, 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+function linkProgram(gl, vsSource, fsSource) {
+  function compile(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  var p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vsSource));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fsSource));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p));
+  return p;
 }
