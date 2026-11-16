@@ -118,8 +118,13 @@ export function draw() {
   map.on("zoom", updateAnnotationVisibility);
   map.on("resize", updateAnnotationVisibility);
 
-  initLegend();
+  safely("legend setup", initLegend);
   initSearch();
+}
+
+// Run a step; if it throws, log which step failed and carry on
+function safely(label, fn) {
+  try { fn(); } catch (e) { console.error("[" + label + "]", e); }
 }
 
 export function update() {
@@ -131,25 +136,32 @@ export function update() {
     return; // style.load will call update() again
   }
   if (!mapReady) return;
-  applyBasePalette();
-  updateLegend();
-  applyCategoryFilter();
+
+  safely("base palette", applyBasePalette);
+
+  // Points first, so nothing below can stop them from drawing
   map.getSource("points").setData({ type: "FeatureCollection", features: buildFeatures() });
   map.setPaintProperty("points", "circle-radius", radiusValue());
   map.setPaintProperty("points", "circle-opacity", state.point_opacity);
   map.setLayerZoomRange("points", state.point_min_zoom, state.point_max_zoom);
   map.setPaintProperty("points", "circle-color", colorExpression());
+  map.setPaintProperty("points", "circle-stroke-width", state.point_outline_width);
+  map.setPaintProperty("points", "circle-stroke-color", state.point_outline_color);
+  map.setPaintProperty("points", "circle-stroke-opacity", state.point_outline_opacity);
   document.getElementById("search-input").placeholder = state.search_placeholder;
 
-  renderAnnotations();
+  safely("legend", updateLegend);
+  applyCategoryFilter(); // after the legend, which tidies up hidden categories
 
-  popup
-    .setColumnNames(rows().column_names || {})
-    .hideColumnNames(["lat", "lon"])
-    .update();
+  safely("annotations", renderAnnotations);
+  safely("popup", function () {
+    popup
+      .setColumnNames(rows().column_names || {})
+      .hideColumnNames(["lat", "lon"])
+      .update();
+  });
 
-
-  applyBlendMode();
+  applyBlendMode(); // must stay last
 }
 
 // ---------- points ----------
