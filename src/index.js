@@ -1,5 +1,7 @@
 import initialisePopup from "@flourish/info-popup";
-import { createLegendContainer, createDiscreteColorLegend } from "@flourish/legend";
+// import { createLegendContainer, createDiscreteColorLegend } from "@flourish/legend";
+import initialisePopup from "@flourish/info-popup";
+import { createDiscreteColorLegend } from "@flourish/legend";
 
 export var data = {};
 
@@ -510,11 +512,8 @@ function applyBasePalette() {
 // ---------- legend ----------
 
 function initLegend() {
-  legendContainer = createLegendContainer(state.legend_container);
   legendCategorical = createDiscreteColorLegend(state.legend_categorical);
-  legendContainer
-    .appendTo(document.getElementById("legend"))
-    .add([legendCategorical]);
+  legendCategorical.appendTo(document.getElementById("legend"));
 
   legendCategorical.on("click", function (d) {
     if (!state.legend_filter) return;
@@ -552,8 +551,8 @@ function updateLegend() {
 
   legendCategorical
     .data(items)
-    .filtered(Object.keys(hiddenCategories));
-  legendContainer.update();
+    .filtered(Object.keys(hiddenCategories))
+    .update();
 }
 
 function applyCategoryFilter() {
