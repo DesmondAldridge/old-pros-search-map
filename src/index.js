@@ -1,4 +1,5 @@
 import initialisePopup from "@flourish/info-popup";
+import { createLegendContainer, createDiscreteColorLegend } from "@flourish/legend";
 
 export var data = {};
 
@@ -27,6 +28,10 @@ export var state = {
   search_placeholder: "Search locations…",
   search_zoom: 12,
   popup: {},
+  legend_position: "bottom-left",
+  legend_filter: true,
+  legend_container: {},
+  legend_categorical: {},
   annotations_show: false,
   annotation_devices: "all",
   annotation_min_zoom: 0,
@@ -50,6 +55,8 @@ var map, popup, currentStyle;
 var hoveredIdx = null;
 var mapReady = false;
 var annotationMarkers = [];
+var legendContainer, legendCategorical;
+var hiddenCategories = {};
 
 export function draw() {
   currentStyle = state.map_style;
@@ -107,6 +114,7 @@ export function draw() {
   map.on("zoom", updateAnnotationVisibility);
   map.on("resize", updateAnnotationVisibility);
 
+  initLegend();
   initSearch();
 }
 
@@ -120,6 +128,8 @@ export function update() {
   }
   if (!mapReady) return;
   applyBasePalette();
+  updateLegend();
+  applyCategoryFilter();
   map.getSource("points").setData({ type: "FeatureCollection", features: buildFeatures() });
   map.setPaintProperty("points", "circle-radius", radiusValue());
   map.setPaintProperty("points", "circle-opacity", state.point_opacity);
@@ -303,7 +313,9 @@ function initSearch() {
     var matches = [];
     rows().forEach(function (row, idx) {
       var name = (row.name || "").toLowerCase();
-      if (coords(row) && name.includes(q)) matches.push({ row: row, idx: idx, pos: name.indexOf(q) });
+      if (coords(row) && name.includes(q) && !hiddenCategories[row.category || ""]) {
+        matches.push({ row: row, idx: idx, pos: name.indexOf(q) });
+      }
     });
     matches.sort(function (a, b) { return a.pos - b.pos; }); // names starting with the query first
     render(matches.slice(0, 8));
@@ -474,4 +486,60 @@ function applyBasePalette() {
     return v || null;
   }
 
+}
+
+// ---------- legend ----------
+
+function initLegend() {
+  legendContainer = createLegendContainer(state.legend_container);
+  legendCategorical = createDiscreteColorLegend(state.legend_categorical);
+  legendContainer
+    .appendTo(document.getElementById("legend"))
+    .add([legendCategorical]);
+
+  legendCategorical.on("click", function (d) {
+    if (!state.legend_filter) return;
+    if (hiddenCategories[d.label]) delete hiddenCategories[d.label];
+    else hiddenCategories[d.label] = true;
+    popup.clickout(); // close a popup that may belong to a now-hidden point
+    update();
+  });
+}
+
+function legendItems() {
+  var palette = categoryColors();
+  var seen = {};
+  var items = [];
+  rows().forEach(function (row) {
+    var cat = row.category || "";
+    if (!cat || seen[cat]) return;
+    seen[cat] = true;
+    items.push({ label: cat, color: cleanHex(row.color) || palette[cat] });
+  });
+  return items;
+}
+
+function updateLegend() {
+  var holder = document.getElementById("legend");
+  var items = legendItems();
+  holder.className = "map-legend pos-" + state.legend_position + (state.legend_filter ? " filterable" : "");
+  holder.style.display = items.length ? "" : "none";
+
+  // Forget hidden categories that no longer exist in the data
+  Object.keys(hiddenCategories).forEach(function (c) {
+    if (!items.some(function (it) { return it.label === c; })) delete hiddenCategories[c];
+  });
+  if (!state.legend_filter) hiddenCategories = {};
+
+  legendCategorical
+    .data(items)
+    .filtered(Object.keys(hiddenCategories));
+  legendContainer.update();
+}
+
+function applyCategoryFilter() {
+  var hidden = Object.keys(hiddenCategories);
+  map.setFilter("points", hidden.length
+    ? ["!", ["in", ["get", "category"], ["literal", hidden]]]
+    : null);
 }
