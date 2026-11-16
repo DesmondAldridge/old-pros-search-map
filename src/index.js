@@ -1,6 +1,5 @@
 import initialisePopup from "@flourish/info-popup";
 // import { createLegendContainer, createDiscreteColorLegend } from "@flourish/legend";
-import initialisePopup from "@flourish/info-popup";
 import { createDiscreteColorLegend } from "@flourish/legend";
 
 export var data = {};
