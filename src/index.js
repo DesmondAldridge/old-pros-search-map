@@ -24,6 +24,9 @@ export var state = {
   point_scale_factor: 2,
   point_min_zoom: 0,
   point_max_zoom: 24,
+  point_outline_width: 1,
+  point_outline_color: "#ffffff",
+  point_outline_opacity: 1,
   category_colors: ["#1D6996", "#EDAD08", "#0F8554", "#CC503E", "#5F4690", "#38A6A5"],
   color_overrides: "Historic Landmark: #990F4B",
   search_placeholder: "Search locations…",
@@ -647,8 +650,9 @@ function createMultiplyLayer() {
       var canvas = map.getCanvas();
       var stroke = hexToRgb01(state.point_outline_color);
       gl.uniform2f(loc.u_viewport, canvas.clientWidth, canvas.clientHeight);
-      gl.uniform1f(loc.u_radius, currentRadius() + state.point_outline_width);
-      gl.uniform1f(loc.u_stroke_width, state.point_outline_width);
+      var strokeW = +state.point_outline_width || 0;
+      gl.uniform1f(loc.u_radius, currentRadius() + strokeW);
+      gl.uniform1f(loc.u_stroke_width, strokeW);
       gl.uniform3f(loc.u_stroke_color, stroke[0], stroke[1], stroke[2]);
       gl.uniform1f(loc.u_opacity, state.point_opacity);
       gl.uniform1f(loc.u_stroke_opacity, state.point_outline_opacity);
@@ -690,10 +694,10 @@ function multiplyVertices() {
 }
 
 function currentRadius() {
-  var r = state.point_radius;
+  var r = +state.point_radius || 6;
   if (!state.point_scale_with_zoom) return r;
   var t = Math.min(Math.max((map.getZoom() - 2) / 12, 0), 1); // same 2 → 14 ramp as radiusValue()
-  return r + (r * state.point_scale_factor - r) * t;
+  return r + (r * (+state.point_scale_factor || 1) - r) * t;
 }
 
 function hexToRgb01(hex) {
