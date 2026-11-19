@@ -7,6 +7,7 @@ export var data = {};
 export var state = {
   map_style: "https://tiles.openfreemap.org/styles/liberty",
   base_hide_labels: false,
+  base_hide_pois: true,
   base_land_color: null,
   base_water_color: null,
   base_road_color: null,
@@ -528,8 +529,10 @@ function applyBasePalette() {
         custom != null ? custom : baseDefaults[layer.id + "|" + rule.prop]);
     });
     if (layer.type === "symbol") {
+      var hide = state.base_hide_labels ||
+        (state.base_hide_pois && layer["source-layer"] === "poi");
       map.setLayoutProperty(layer.id, "visibility",
-        state.base_hide_labels ? "none" : baseDefaults[layer.id + "|visibility"]);
+        hide ? "none" : baseDefaults[layer.id + "|visibility"]);
     }
   });
 
