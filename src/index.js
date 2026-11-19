@@ -32,6 +32,8 @@ export var state = {
   color_overrides: "Historic Landmark: #990F4B",
   search_placeholder: "Search locations…",
   search_zoom: 12,
+  search_category: true,
+  search_info: true,
   popup: {},
   legend_position: "bottom-left",
   legend_filter: true,
@@ -307,9 +309,9 @@ function initSearch() {
       li.setAttribute("role", "option");
       li.dataset.idx = m.idx;
       li.textContent = m.row.name;
-      if (m.row.category) {
+      if (m.sub) {
         var sub = document.createElement("span");
-        sub.textContent = m.row.category;
+        sub.textContent = m.sub;
         li.appendChild(sub);
       }
       // mousedown (not click) so it fires before the input's blur clears the list
@@ -330,14 +332,14 @@ function initSearch() {
   input.addEventListener("input", function () {
     var q = input.value.trim().toLowerCase();
     if (q.length < 2) { render([]); return; }
+    q = norm(q);
     var matches = [];
     rows().forEach(function (row, idx) {
-      var name = (row.name || "").toLowerCase();
-      if (coords(row) && name.includes(q) && !hiddenCategories[row.category || ""]) {
-        matches.push({ row: row, idx: idx, pos: name.indexOf(q) });
-      }
+      if (!coords(row) || hiddenCategories[row.category || ""]) return;
+      var m = searchMatch(row, q);
+      if (m) matches.push({ row: row, idx: idx, rank: m.rank, sub: m.sub });
     });
-    matches.sort(function (a, b) { return a.pos - b.pos; }); // names starting with the query first
+    matches.sort(function (a, b) { return a.rank - b.rank; }); // name > category > popup info
     render(matches.slice(0, 8));
   });
 
@@ -354,6 +356,42 @@ function initSearch() {
   });
 
   input.addEventListener("blur", function () { render([]); });
+}
+
+// Lowercase and strip accents so "zurich" matches "Zürich"
+function norm(s) {
+  return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function stripTags(s) {
+  return String(s || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Returns { rank, sub } if the row matches, otherwise null. Lower rank = higher in the list.
+function searchMatch(row, q) {
+  var pos = norm(row.name).indexOf(q);
+  if (pos !== -1) return { rank: pos, sub: row.category || "" };
+
+  if (state.search_category && norm(row.category).includes(q)) {
+    return { rank: 1000, sub: row.category };
+  }
+
+  if (state.search_info) {
+    var info = row.info || [];
+    for (var i = 0; i < info.length; i++) {
+      var text = stripTags(info[i]);
+      var p = norm(text).indexOf(q);
+      if (p !== -1) return { rank: 2000, sub: snippet(text, p, q.length) };
+    }
+  }
+  return null;
+}
+
+// A short excerpt around the match, e.g. "…opened in 1969 as a bar…"
+function snippet(text, pos, len) {
+  var start = Math.max(0, pos - 25);
+  var end = Math.min(text.length, pos + len + 25);
+  return (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
 }
 
 // ---------- annotations ----------
